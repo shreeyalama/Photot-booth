@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🎞️ Café Bloom Photobooth</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ══════════════════════════════════════════
+       CSS VARIABLES — change colours here easily
+       ══════════════════════════════════════════ */
+    :root {
+      --beige:       #f5ede0;
+      --cream:       #faf6f0;
+      --brown-light: #c8a882;
+      --brown-mid:   #9e7553;
+      --brown-dark:  #5c3d2e;
+      --blush:       #f0d9cc;
+      --shadow:      rgba(92,61,46,0.15);
+      --radius:      20px;
+      --radius-sm:   12px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--beige);
+      color: var(--brown-dark);
+      min-height: 100vh;
+    }
+
+    .page { max-width: 520px; margin: 0 auto; padding: 24px 16px 60px; }
+
+    /* ── Header ── */
+    header { text-align: center; margin-bottom: 28px; }
+    .subtitle {
+      font-size: 12px; letter-spacing: 3px;
+      text-transform: uppercase; color: var(--brown-mid); margin-bottom: 6px;
+    }
+    h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(26px, 7vw, 36px);
+      color: var(--brown-dark); line-height: 1.2;
+    }
+    h1 span { font-style: italic; color: var(--brown-mid); }
+    .deco-line { display:flex; align-items:center; justify-content:center; gap:10px; margin-top:10px; }
+    .deco-line hr { flex:1; border:none; border-top:1px solid var(--brown-light); max-width:80px; }
+
+    /* ── Main card ── */
+    .card {
+      background: var(--cream); border-radius: var(--radius);
+      padding: 20px; box-shadow: 0 8px 32px var(--shadow); margin-bottom: 24px;
+    }
+
+    /* ── Camera/preview area ── */
+    .camera-wrap {
+      position: relative; border-radius: var(--radius-sm);
+      overflow: hidden; background: var(--brown-dark);
+      aspect-ratio: 3/4; margin-bottom: 16px;
+    }
+
+    /* Live video — mirrored like a selfie mirror */
+    #video {
+      width:100%; height:100%; object-fit:cover; display:block;
+      transform: scaleX(-1);
+    }
+
+    /* Preview image shown in fallback mode */
+    #preview-img {
+      width:100%; height:100%; object-fit:cover; display:none;
+    }
+
+    #canvas { display: none; }
+
+    /* Big countdown number */
+    #timer-overlay {
+      position:absolute; inset:0;
+      display:flex; align-items:center; justify-content:center;
+      font-family:'Playfair Display',serif; font-size:96px; color:white;
+      text-shadow:0 0 30px rgba(0,0,0,0.5);
+      pointer-events:none; opacity:0; transition:opacity 0.2s;
+    }
+
+    /* Corner decoration brackets */
+    .corner { position:absolute; width:20px; height:20px; border-color:var(--blush); border-style:solid; opacity:0.8; }
+    .corner.tl { top:8px; left:8px;    border-width:2px 0 0 2px; }
+    .corner.tr { top:8px; right:8px;   border-width:2px 2px 0 0; }
+    .corner.bl { bottom:8px; left:8px; border-width:0 0 2px 2px; }
+    .corner.br { bottom:8px; right:8px;border-width:0 2px 2px 0; }
+
+    /* White flash when shutter fires */
+    @keyframes flash { 0%{opacity:0} 30%{opacity:0.8} 100%{opacity:0} }
+    .flash-overlay {
+      position:absolute; inset:0; background:white;
+      pointer-events:none; opacity:0;
+    }
+    .flash-overlay.go { animation:flash 0.4s ease-out forwards; }
+
+    /* Placeholder before camera starts */
+    #no-camera {
+      position:absolute; inset:0;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      color:var(--brown-light); gap:10px; font-size:14px; text-align:center; padding:20px;
+    }
+    #no-camera .icon { font-size:48px; }
+
+    /* ── Section labels ── */
+    .section-label {
+      font-size:11px; letter-spacing:2px; text-transform:uppercase;
+      color:var(--brown-mid); margin-bottom:10px; font-weight:500;
+    }
+
+    /* ── Filter chips ── */
+    .filter-row { display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:18px; scrollbar-width:none; }
+    .filter-row::-webkit-scrollbar { display:none; }
+    .filter-btn {
+      flex-shrink:0; border:2px solid transparent; background:var(--blush);
+      color:var(--brown-dark); border-radius:50px; padding:6px 14px;
+      font-size:12px; font-family:'DM Sans',sans-serif; font-weight:500;
+      cursor:pointer; transition:all 0.2s; white-space:nowrap;
+    }
+    .filter-btn:hover  { background:var(--brown-light); color:white; }
+    .filter-btn.active { background:var(--brown-mid); color:white; border-color:var(--brown-dark); }
+
+    /* ── Timer chips ── */
+    .timer-row { display:flex; gap:8px; margin-bottom:20px; align-items:center; }
+    .timer-row .section-label { margin:0; flex-shrink:0; }
+    .timer-opt {
+      border:2px solid var(--brown-light); background:transparent; color:var(--brown-dark);
+      border-radius:50px; padding:5px 13px; font-size:12px;
+      font-family:'DM Sans',sans-serif; cursor:pointer; transition:all 0.2s;
+    }
+    .timer-opt:hover  { background:var(--blush); }
+    .timer-opt.active { background:var(--brown-dark); color:white; border-color:var(--brown-dark); }
+
+    /* ── Buttons ── */
+    .btn-primary {
+      width:100%; padding:15px; background:var(--brown-dark); color:white;
+      border:none; border-radius:var(--radius-sm);
+      font-family:'Playfair Display',serif; font-size:17px; font-style:italic;
+      cursor:pointer; transition:all 0.2s; letter-spacing:0.5px;
+    }
+    .btn-primary:hover:not(:disabled) {
+      background:var(--brown-mid); transform:translateY(-1px); box-shadow:0 4px 14px var(--shadow);
+    }
+    .btn-primary:disabled { opacity:0.45; cursor:default; }
+
+    /* Two-button row in fallback mode */
+    .btn-row { display:flex; gap:10px; margin-top:10px; }
+    .btn-row .btn-primary { flex:1; font-size:14px; padding:12px; }
+    .btn-outline {
+      flex:1; padding:12px; background:transparent; color:var(--brown-dark);
+      border:2px solid var(--brown-light); border-radius:var(--radius-sm);
+      font-family:'DM Sans',sans-serif; font-size:14px; cursor:pointer; transition:all 0.2s;
+    }
+    .btn-outline:hover { background:var(--blush); }
+
+    /* ── Gallery ── */
+    .gallery-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+    .gallery-title  { font-family:'Playfair Display',serif; font-size:18px; }
+    .clear-btn {
+      font-size:11px; color:var(--brown-mid); background:none; border:none;
+      cursor:pointer; letter-spacing:1px; text-transform:uppercase;
+      text-decoration:underline; text-underline-offset:3px;
+    }
+    #gallery { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+    .photo-card {
+      background:var(--cream); border-radius:var(--radius-sm); overflow:hidden;
+      box-shadow:0 4px 16px var(--shadow);
+      animation:popIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both;
+      transition:transform 0.25s, opacity 0.25s;
+    }
+    @keyframes popIn { from{transform:scale(0.7);opacity:0} to{transform:scale(1);opacity:1} }
+    .photo-card img { width:100%; display:block; }
+    .photo-actions  { display:flex; border-top:1px solid var(--blush); }
+    .photo-actions button {
+      flex:1; background:none; border:none; padding:9px 4px;
+      font-size:16px; cursor:pointer; transition:background 0.15s;
+    }
+    .photo-actions button:first-child { border-right:1px solid var(--blush); }
+    .photo-actions button:hover { background:var(--blush); }
+    #gallery-empty { text-align:center; color:var(--brown-light); padding:30px 0; font-size:14px; grid-column:1/-1; }
+    #gallery-empty .icon { font-size:36px; display:block; margin-bottom:8px; }
+
+    /* ── CSS Filters applied live to video / preview ── */
+    .f-none    { filter:none; }
+    .f-vintage { filter:sepia(0.55) contrast(1.1) brightness(0.95) saturate(0.8); }
+    .f-bw      { filter:grayscale(1) contrast(1.15) brightness(1.05); }
+    .f-dreamy  { filter:brightness(1.1) saturate(0.6) contrast(0.85) blur(0.4px); }
+    .f-soft    { filter:brightness(1.15) saturate(0.75) contrast(0.9); }
+    .f-y2k     { filter:saturate(1.8) contrast(1.1) brightness(1.05) hue-rotate(-10deg); }
+    .f-golden  { filter:sepia(0.4) saturate(1.5) brightness(1.1) contrast(0.95); }
+    .f-cool    { filter:saturate(0.8) hue-rotate(30deg) brightness(1.05); }
+
+    footer { text-align:center; margin-top:40px; font-size:11px; color:var(--brown-light); letter-spacing:1px; }
+  </style>
+</head>
+
+<body>
+<div class="page">
+
+  <!-- ── HEADER ── -->
+  <header>
+    <p class="subtitle">✿ polaroid studio ✿</p>
+    <h1>Café Bloom <span>Photobooth</span></h1>
+    <div class="deco-line"><hr /><span>🌸</span><hr /></div>
+  </header>
+
+  <!-- ── CAMERA CARD ── -->
+  <div class="card">
+
+    <div class="camera-wrap" id="cameraWrap">
+      <!-- Live camera stream (mirrors front camera) -->
+      <video id="video" autoplay playsinline muted></video>
+
+      <!-- Fallback: shows chosen photo before adding to gallery -->
+      <img id="preview-img" alt="preview" />
+
+      <!-- Used to draw/capture the final image -->
+      <canvas id="canvas"></canvas>
+
+      <!-- Countdown number -->
+      <div id="timer-overlay">3</div>
+
+      <!-- White flash on capture -->
+      <div class="flash-overlay" id="flashOverlay"></div>
+
+      <!-- Cute corners -->
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+
+      <!-- Shown before camera starts -->
+      <div id="no-camera">
+        <span class="icon">📷</span>
+        <p id="nc-title">Tap "Open Camera" to start</p>
+        <p id="nc-sub" style="font-size:11px;opacity:0.7;">Allow camera access when prompted</p>
+      </div>
+    </div>
+
+    <!-- ── FILTER CHIPS ── -->
+    <p class="section-label">✦ Filter</p>
+    <div class="filter-row" id="filterRow">
+      <button class="filter-btn active" data-filter="f-none">None</button>
+      <button class="filter-btn" data-filter="f-vintage">Vintage</button>
+      <button class="filter-btn" data-filter="f-bw">B&amp;W</button>
+      <button class="filter-btn" data-filter="f-dreamy">Dreamy</button>
+      <button class="filter-btn" data-filter="f-soft">Soft</button>
+      <button class="filter-btn" data-filter="f-y2k">Y2K</button>
+      <button class="filter-btn" data-filter="f-golden">Golden</button>
+      <button class="filter-btn" data-filter="f-cool">Cool</button>
+    </div>
+
+    <!-- ── TIMER CHIPS ── -->
+    <div class="timer-row">
+      <p class="section-label">⏱ Timer</p>
+      <button class="timer-opt active" data-seconds="0">Off</button>
+      <button class="timer-opt" data-seconds="3">3s</button>
+      <button class="timer-opt" data-seconds="5">5s</button>
+      <button class="timer-opt" data-seconds="10">10s</button>
+    </div>
+
+    <!-- Main action button -->
+    <button class="btn-primary" id="mainBtn" onclick="handleMainBtn()">
+      🌸 Open Camera
+    </button>
+
+    <!--
+      Fallback buttons — only visible after user picks a photo.
+      "Use Photo" → applies filter & saves to gallery.
+      "Retake"    → opens camera/picker again.
+    -->
+    <div class="btn-row" id="fallbackBtns" style="display:none;">
+      <button class="btn-primary" onclick="useFallbackPhoto()">✅ Use Photo</button>
+      <button class="btn-outline"  onclick="triggerFilePicker()">🔄 Retake</button>
+    </div>
+
+  </div><!-- end .card -->
+
+  <!-- ── GALLERY ── -->
+  <div>
+    <div class="gallery-header">
+      <h2 class="gallery-title">🎞️ Your Photos</h2>
+      <button class="clear-btn" onclick="clearGallery()">Clear all</button>
+    </div>
+    <div id="gallery">
+      <div id="gallery-empty">
+        <span class="icon">🌷</span>
+        No photos yet — strike a pose!
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .page -->
+
+<!--
+  ════════════════════════════════════════════════════
+  THE KEY FIX:  <input type="file" capture="user">
+  ════════════════════════════════════════════════════
+  capture="user"   → Android/iOS opens the FRONT camera directly
+  accept="image/*" → only images allowed
+  This works on ANY protocol: http://, https://, file://, content://
+  It is the guaranteed fallback when getUserMedia() is blocked.
+-->
+<input type="file" id="fileInput" accept="image/*" capture="user"
+       style="display:none;" onchange="handleFileInput(event)" />
+
+<footer>made with 🤎 · café bloom studio</footer>
+
+<!-- ══════════════════════════════════════════
+     JAVASCRIPT
+     ══════════════════════════════════════════ -->
+<script>
+
+  // ─────────────────────────────────────────────
+  //  STATE
+  // ─────────────────────────────────────────────
+  let stream          = null;   // Live MediaStream from getUserMedia
+  let cameraOn        = false;  // Is live camera running?
+  let useFallback     = false;  // Are we in file-input mode?
+  let currentFilter   = 'f-none';
+  let timerSeconds    = 0;
+  let isCounting      = false;
+  let photoCount      = 0;
+  let fallbackDataURL = null;   // Stores image chosen via file input
+
+  // Canvas filter strings matching each CSS class name
+  const FILTER_MAP = {
+    'f-none':    'none',
+    'f-vintage': 'sepia(0.55) contrast(1.1) brightness(0.95) saturate(0.8)',
+    'f-bw':      'grayscale(1) contrast(1.15) brightness(1.05)',
+    'f-dreamy':  'brightness(1.1) saturate(0.6) contrast(0.85)',
+    'f-soft':    'brightness(1.15) saturate(0.75) contrast(0.9)',
+    'f-y2k':     'saturate(1.8) contrast(1.1) brightness(1.05) hue-rotate(-10deg)',
+    'f-golden':  'sepia(0.4) saturate(1.5) brightness(1.1) contrast(0.95)',
+    'f-cool':    'saturate(0.8) hue-rotate(30deg) brightness(1.05)',
+  };
+
+  // ─────────────────────────────────────────────
+  //  DOM REFS
+  // ─────────────────────────────────────────────
+  const video        = document.getElementById('video');
+  const previewImg   = document.getElementById('preview-img');
+  const canvas       = document.getElementById('canvas');
+  const mainBtn      = document.getElementById('mainBtn');
+  const timerOverlay = document.getElementById('timer-overlay');
+  const flashOverlay = document.getElementById('flashOverlay');
+  const gallery      = document.getElementById('gallery');
+  const noCamera     = document.getElementById('no-camera');
+  const ncTitle      = document.getElementById('nc-title');
+  const ncSub        = document.getElementById('nc-sub');
+  const fallbackBtns = document.getElementById('fallbackBtns');
+  const fileInput    = document.getElementById('fileInput');
+
+  // ─────────────────────────────────────────────
+  //  FILTER CHIP CLICKS
+  // ─────────────────────────────────────────────
+  document.getElementById('filterRow').querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      // Swap CSS class on whichever element is visible
+      video.classList.remove(currentFilter);
+      previewImg.classList.remove(currentFilter);
+      currentFilter = btn.dataset.filter;
+      video.classList.add(currentFilter);
+      previewImg.classList.add(currentFilter);
+    });
+  });
+
+  // ─────────────────────────────────────────────
+  //  TIMER CHIP CLICKS
+  // ─────────────────────────────────────────────
+  document.querySelectorAll('.timer-opt').forEach(opt => {
+    opt.addEventListener('click', () => {
+      document.querySelectorAll('.timer-opt').forEach(o => o.classList.remove('active'));
+      opt.classList.add('active');
+      timerSeconds = parseInt(opt.dataset.seconds);
+    });
+  });
+
+  // ─────────────────────────────────────────────
+  //  MAIN BUTTON
+  // ─────────────────────────────────────────────
+  function handleMainBtn() {
+    if (!cameraOn && !useFallback) {
+      openCamera();                    // First tap → try live camera
+    } else if (cameraOn && !isCounting) {
+      startCapture();                  // Live camera → capture photo
+    } else if (useFallback) {
+      triggerFilePicker();             // Fallback mode → open picker
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  //  OPEN CAMERA
+  //  Tries getUserMedia. If it fails for any reason
+  //  (permission denied, http://, file://, etc.),
+  //  falls back to <input capture="user"> automatically.
+  // ─────────────────────────────────────────────
+  async function openCamera() {
+    mainBtn.disabled = true;
+    mainBtn.textContent = '⏳ Starting…';
+    ncTitle.textContent = 'Starting camera…';
+    ncSub.textContent   = 'Please tap Allow when prompted';
+
+    // Does the browser even have getUserMedia?
+    const canUseGetUserMedia =
+      !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+
+    if (!canUseGetUserMedia) {
+      // No getUserMedia support — go straight to fallback
+      switchToFallback('Live camera not supported on this browser.');
+      return;
+    }
+
+    try {
+      // ── Attempt 1: front camera, no strict size constraints ──
+      let mediaStream;
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'user' } },
+          audio: false
+        });
+      } catch (e1) {
+        // ── Attempt 2: any camera ──
+        console.warn('Front camera failed, trying any camera:', e1.message);
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false
+        });
+      }
+
+      // ✅ getUserMedia succeeded!
+      stream = mediaStream;
+      video.srcObject = stream;
+
+      // Play video (mobile-safe)
+      try {
+        const p = video.play();
+        if (p) await p;
+      } catch(e) { /* autoplay blocked — stream is still connected */ }
+
+      video.classList.add(currentFilter);
+      noCamera.style.display = 'none';
+      cameraOn = true;
+      useFallback = false;
+      mainBtn.disabled = false;
+      mainBtn.textContent = '📸 Capture Photo';
+
+    } catch (err) {
+      // ❌ getUserMedia failed — automatically switch to fallback
+      console.warn('getUserMedia failed (' + err.name + ') → switching to file input fallback');
+      switchToFallback(getFriendlyError(err.name));
+    }
+  }
+
+  // Converts technical error names to friendly messages
+  function getFriendlyError(errName) {
+    if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError')
+      return 'Permission denied — tap below to take a photo instead 👇';
+    if (errName === 'NotFoundError')
+      return 'No camera detected — tap below to choose a photo 👇';
+    if (errName === 'NotReadableError')
+      return 'Camera is busy — tap below to use your gallery 👇';
+    return 'Camera unavailable — tap below to use your gallery 👇';
+  }
+
+  // ─────────────────────────────────────────────
+  //  SWITCH TO FALLBACK MODE
+  //  Shows a "Take Photo" button that uses
+  //  <input capture="user"> — works everywhere!
+  // ─────────────────────────────────────────────
+  function switchToFallback(message) {
+    useFallback = true;
+    cameraOn    = false;
+
+    noCamera.querySelector('.icon').textContent = '🤳';
+    ncTitle.textContent = 'Tap below to take a photo';
+    ncSub.textContent   = message;
+
+    mainBtn.disabled    = false;
+    mainBtn.textContent = '📷 Take / Choose Photo';
+    // Override onclick so button opens the file picker
+    mainBtn.onclick     = triggerFilePicker;
+  }
+
+  // ─────────────────────────────────────────────
+  //  TRIGGER THE HIDDEN FILE INPUT
+  //  On Android/iOS, capture="user" makes this
+  //  open the FRONT camera directly — no browser
+  //  permissions dialogue needed!
+  // ─────────────────────────────────────────────
+  function triggerFilePicker() {
+    fileInput.click();
+  }
+
+  // ─────────────────────────────────────────────
+  //  HANDLE FILE INPUT RESULT
+  //  Called after user takes/chooses a photo
+  // ─────────────────────────────────────────────
+  function handleFileInput(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      fallbackDataURL = e.target.result;  // base64 image string
+
+      // Show chosen image in the camera-wrap area
+      previewImg.src = fallbackDataURL;
+      previewImg.classList.remove(...Object.keys(FILTER_MAP));
+      previewImg.classList.add(currentFilter);  // Apply selected filter
+      previewImg.style.display = 'block';
+      noCamera.style.display   = 'none';
+
+      // Hide main button, show Use/Retake buttons
+      mainBtn.style.display      = 'none';
+      fallbackBtns.style.display = 'flex';
+    };
+    reader.readAsDataURL(file);
+
+    // Reset so the same file can be picked again if needed
+    fileInput.value = '';
+  }
+
+  // ─────────────────────────────────────────────
+  //  USE FALLBACK PHOTO
+  //  Draws preview image onto canvas with filter
+  //  applied, then adds to gallery.
+  // ─────────────────────────────────────────────
+  function useFallbackPhoto() {
+    if (!fallbackDataURL) return;
+
+    const img = new Image();
+    img.onload = function () {
+      canvas.width  = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.filter = FILTER_MAP[currentFilter] || 'none';
+      ctx.drawImage(img, 0, 0);
+
+      // Flash!
+      doFlash();
+      addToGallery(canvas.toDataURL('image/png'));
+
+      // Reset UI for next photo
+      previewImg.style.display   = 'none';
+      noCamera.style.display     = 'flex';
+      ncTitle.textContent = 'Tap below to take a photo';
+      mainBtn.style.display      = 'inline-block';
+      fallbackBtns.style.display = 'none';
+      fallbackDataURL = null;
+    };
+    img.src = fallbackDataURL;
+  }
+
+  // ─────────────────────────────────────────────
+  //  LIVE CAMERA: START CAPTURE (with timer)
+  // ─────────────────────────────────────────────
+  function startCapture() {
+    if (timerSeconds === 0) {
+      snapPhoto();
+    } else {
+      isCounting = true;
+      mainBtn.disabled = true;
+      mainBtn.textContent = '⏳ Get ready…';
+      countdown(timerSeconds);
+    }
+  }
+
+  function countdown(n) {
+    if (n <= 0) {
+      timerOverlay.style.opacity = 0;
+      snapPhoto();
+      return;
+    }
+    timerOverlay.textContent   = n;
+    timerOverlay.style.opacity = 1;
+    setTimeout(() => countdown(n - 1), 1000);
+  }
+
+  // ─────────────────────────────────────────────
+  //  SNAP PHOTO (live camera)
+  // ─────────────────────────────────────────────
+  function snapPhoto() {
+    canvas.width  = video.videoWidth  || 640;
+    canvas.height = video.videoHeight || 480;
+
+    const ctx = canvas.getContext('2d');
+    ctx.filter = FILTER_MAP[currentFilter] || 'none';
+
+    // Mirror the frame to match what user sees on screen
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    doFlash();
+    addToGallery(canvas.toDataURL('image/png'));
+
+    isCounting = false;
+    mainBtn.disabled = false;
+    mainBtn.textContent = '📸 Capture Photo';
+  }
+
+  // ─────────────────────────────────────────────
+  //  FLASH ANIMATION
+  // ─────────────────────────────────────────────
+  function doFlash() {
+    flashOverlay.classList.remove('go');
+    void flashOverlay.offsetWidth; // Force reflow to restart animation
+    flashOverlay.classList.add('go');
+  }
+
+  // ─────────────────────────────────────────────
+  //  ADD PHOTO TO GALLERY
+  // ─────────────────────────────────────────────
+  function addToGallery(dataURL) {
+    photoCount++;
+    const empty = document.getElementById('gallery-empty');
+    if (empty) empty.remove();
+
+    const card = document.createElement('div');
+    card.className = 'photo-card';
+    card.innerHTML = `
+      <img src="${dataURL}" alt="Photo ${photoCount}" />
+      <div class="photo-actions">
+        <button title="Download">⬇️</button>
+        <button title="Delete" onclick="deletePhoto(this)">🗑️</button>
+      </div>`;
+
+    // Download button: attach event so dataURL isn't inlined in HTML attribute
+    const dlBtn = card.querySelector('[title="Download"]');
+    const num = photoCount;
+    dlBtn.addEventListener('click', () => {
+      const a = document.createElement('a');
+      a.href = dataURL;
+      a.download = 'cafe-bloom-' + num + '.png';
+      a.click();
+    });
+
+    gallery.prepend(card);
+  }
+
+  // ─────────────────────────────────────────────
+  //  DELETE / CLEAR
+  // ─────────────────────────────────────────────
+  function deletePhoto(btn) {
+    const card = btn.closest('.photo-card');
+    card.style.transform = 'scale(0)';
+    card.style.opacity   = '0';
+    setTimeout(() => { card.remove(); checkEmptyGallery(); }, 250);
+  }
+
+  function clearGallery() {
+    gallery.innerHTML = '';
+    checkEmptyGallery();
+  }
+
+  function checkEmptyGallery() {
+    if (gallery.children.length === 0) {
+      gallery.innerHTML = `
+        <div id="gallery-empty">
+          <span class="icon">🌷</span>
+          No photos yet — strike a pose!
+        </div>`;
+    }
+  }
+
+</script>
+</body>
+</html>
